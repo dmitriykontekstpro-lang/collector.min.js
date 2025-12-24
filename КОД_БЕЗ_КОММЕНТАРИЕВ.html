@@ -1,0 +1,55 @@
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@3"></script>
+<script src="https://raw.githubusercontent.com/dmitriykontekstpro-lang/collector.min.js/main/collector.min.js"></script>
+
+<script>
+    (function () {
+        'use strict';
+
+        function initAnalytics() {
+            if (typeof TildaAnalytics === 'undefined') {
+                console.error('❌ TildaAnalytics не загрузился!');
+                console.error('Проверьте что файл загружен на GitHub');
+                return;
+            }
+
+            TildaAnalytics.init({
+                supabaseUrl: 'https://qqfyjrugrinmdijpsutj.supabase.co',
+                supabaseKey: 'sb_publishable_KzDns19CaSpI-40YZgPPCg_hCDb-1Iz',
+                yandexMetrikaId: 51854510,
+                debug: true,
+                trackMouseMovement: false,
+                scrollDebounce: 300,
+                mouseDebounce: 500,
+                batchInterval: 5000,
+                maxBatchSize: 10,
+                sessionTimeout: 1800000,
+                scrollThresholds: [25, 50, 75, 90, 100],
+                useFingerprintJS: true,
+                requireConsent: false,
+                callbacks: {
+                    onInit: function (userId, sessionId) {
+                        console.log('✅ Tilda Analytics запущен');
+                        console.log('👤 User ID:', userId);
+                        console.log('📊 Session ID:', sessionId);
+                        console.log('🎯 Яндекс.Метрика:', 51854510);
+                    },
+                    onBatchSent: function (eventCount) {
+                        console.log('📤 Отправлено событий в Supabase:', eventCount);
+                    },
+                    onError: function (error) {
+                        console.error('❌ Ошибка аналитики:', error);
+                    }
+                }
+            });
+
+            console.log('🚀 Tilda Analytics готов к работе!');
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initAnalytics);
+        } else {
+            initAnalytics();
+        }
+    })();
+</script>

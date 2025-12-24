@@ -1,0 +1,65 @@
+<!-- Библиотеки -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<!-- Tilda Analytics v4.2 (Strict 10s Rule + User Columns) -->
+<script>
+    (function () {
+        'use strict';
+        window.TildaAnalytics = {
+            config: null, supabase: null, state: { userId: null, currentSessionId: null, sessions: {}, events: new Set, goals: new Set, lastActivity: Date.now(), hasSynced: !1 }, _synced: !1, _syncTimer: null, _tickTimer: null,
+            async init(e) {
+                this.config = { supabaseUrl: "", supabaseKey: "", tableName: "analytics", minSessionDuration: 10, sessionTimeout: 12e5, syncInterval: 1e4, debug: !1, yandexMetrikaId: null, ...e },
+                "undefined" != typeof supabase && (this.supabase = supabase.createClient(this.config.supabaseUrl, this.config.supabaseKey), this._loadState(), this._checkSessionTimeout(), this._initTick(), this._initListeners(),
+                    this.config.yandexMetrikaId && this._initYandexMetrika(), this._log("🚀 Init v4.2 Strict"), this.trackEvent("page_view"))
+            },
+            _loadState() {
+                let e = localStorage.getItem("ta_uid"); e || (e = this._uuid(), localStorage.setItem("ta_uid", e)), this.state.userId = e; try {
+                    const t = JSON.parse(localStorage.getItem("ta_store") || "{}");
+                    this.state.sessions = t.sessions || {}, this.state.events = new Set(t.events || []), this.state.goals = new Set(t.goals || []), this.state.lastActivity = t.lastActivity || Date.now(), this.state.currentSessionId = t.currentSessionId || null,
+                        this.state.hasSynced = !!t.hasSynced
+                } catch (e) { console.error(e) }
+            },
+            _saveState() { localStorage.setItem("ta_store", JSON.stringify({ sessions: this.state.sessions, events: Array.from(this.state.events), goals: Array.from(this.state.goals), lastActivity: this.state.lastActivity, currentSessionId: this.state.currentSessionId, hasSynced: this.state.hasSynced })) },
+            _checkSessionTimeout() {
+                const e = Date.now(); (!this.state.currentSessionId || e - this.state.lastActivity > this.config.sessionTimeout) && (this.state.currentSessionId = this._uuid(), this.state.sessions[this.state.currentSessionId] = 0,
+                    this._log("🆕 New Session:", this.state.currentSessionId)), this.state.lastActivity = e, this._saveState()
+            },
+            _initTick() { this._tickTimer = setInterval((() => { if (document.hidden) return; const e = this.state.currentSessionId; e && (this.state.sessions[e] = (this.state.sessions[e] || 0) + 1, this.state.lastActivity = Date.now(), this._saveState(), this._trySync()) }), 1e3) },
+            async _trySync() {
+                const e = this.state.currentSessionId, t = this.state.sessions[e] || 0, s = t < this.config.minSessionDuration;
+                // ЛОГИКА: Если мы еще ни разу не сохраняли этого юзера (hasSynced=false) И текущая сессия короткая (<10c) -> НЕ ОТПРАВЛЯЕМ
+                if (!this.state.hasSynced && s) return;
+                // Ограничение частоты запросов (раз в 10 сек)
+                if (!this._synced || !(Date.now() - this._lastSyncTime < this.config.syncInterval)) await this._syncToSupabase()
+            },
+            async _syncToSupabase() {
+                const e = Object.values(this.state.sessions).reduce(((e, t) => e + t), 0), t = Object.keys(this.state.sessions).length, s = {
+                    ua: navigator.userAgent, screen: `${window.screen.width}x${window.screen.height}`,
+                    is_mobile: /Mobile|Android|iPhone/i.test(navigator.userAgent), language: navigator.language, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, referrer: document.referrer || null, entry_url: window.location.href, page_title: document.title,
+                    total_time_sec: e, total_sessions_count: t, ...this._getUTM()
+                }, i = Array.from(this.state.events).join(", "), n = Array.from(this.state.goals).join(", "),
+                // Имена полей ТОЧНО как в запросе (event_name, yandex_metrika)
+                a = { user_id: this.state.userId, sessions_history: this.state.sessions, event_name: i, yandex_metrika: n, data: s, last_updated: (new Date).toISOString() };
+                this._log("⬆️ Sync", a); const { error: r } = await this.supabase.from(this.config.tableName).upsert(a, { onConflict: "user_id" });
+                r ? console.error("Sync fail", r) : (this._synced = !0, this.state.hasSynced = !0, this._saveState(), this._lastSyncTime = Date.now())
+            },
+            trackEvent(e) { this.state.events.add(e), this._saveState() }, trackGoal(e, t) { this.state.goals.add(e), this.trackEvent("yandex_goal"), this._saveState(), this._log("🎯 Metrika", e) },
+            _initListeners() { document.addEventListener("click", (e => { e.target.closest('a, button, .t-btn, [role="button"]') && this.trackEvent("click") }), !0), document.addEventListener("submit", (() => this.trackEvent("form_submit"))) },
+            _initYandexMetrika() { const e = window.ym; if (e) { window.ym = (...t) => { "reachGoal" === t[1] && this.trackGoal(t[2], t[3]), e(...t) } } },
+            _getUTM() { const e = new URLSearchParams(window.location.search); return { utm_source: e.get("utm_source"), utm_medium: e.get("utm_medium"), utm_campaign: e.get("utm_campaign"), utm_content: e.get("utm_content") } },
+            _uuid() { return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (e => { const t = 16 * Math.random() | 0; return ("x" == e ? t : 3 & t | 8).toString(16) })) },
+            _log(...e) { this.config.debug && console.log("[TA v4.2]", ...e) }
+        }
+    })();
+</script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        TildaAnalytics.init({
+            supabaseUrl: 'https://qqfyjrugrinmdijpsutj.supabase.co',
+            supabaseKey: 'sb_publishable_KzDns19CaSpI-40YZgPPCg_hCDb-1Iz',
+            yandexMetrikaId: 51854510,
+            debug: true
+        });
+    });
+</script>

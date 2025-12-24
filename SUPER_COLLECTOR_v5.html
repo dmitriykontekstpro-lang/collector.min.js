@@ -1,0 +1,327 @@
+<!-- Библиотеки -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<!-- Tilda Analytics v5.0 (Digital Profile / Super Collector) -->
+<script>
+    (function () {
+        'use strict';
+        window.TildaAnalytics = {
+            config: null, supabase: null,
+            state: {
+                userId: null, currentSessionId: null, sessions: {}, events: new Set, goals: new Set,
+                hasSynced: false, firstVisit: null, lastVisit: null, totalVisits: 0
+            },
+            // Sensors state
+            sensors: {
+                scrollMax: 0, selectionCount: 0, mouseDistance: 0, mouseTime: 0,
+                formStarted: null, fieldsFilled: new Set(), lastScrollY: 0, scrollTotalTime: 0
+            },
+            _synced: false, _syncTimer: null, _tickTimer: null,
+
+            async init(e) {
+                this.config = { supabaseUrl: "", supabaseKey: "", tableName: "analytics", minSessionDuration: 10, sessionTimeout: 12e5, syncInterval: 1e4, debug: false, yandexMetrikaId: null, ...e };
+                if (typeof supabase !== 'undefined') {
+                    this.supabase = supabase.createClient(this.config.supabaseUrl, this.config.supabaseKey);
+                    this._loadState();
+                    this._checkSessionTimeout();
+                    this._initHardwareInfo(); // Сбор железа
+                    this._initSensors();      // Скролл, мышь, выделение
+                    this._initTick();
+                    this._initListeners();
+                    if (this.config.yandexMetrikaId) this._initYandexMetrika();
+                    this._log("🚀 Init v5.0 Super Collector");
+                    this.trackEvent("page_view");
+                }
+            },
+
+            // --- 1. STATE & HISTORY ---
+            _loadState() {
+                let uid = localStorage.getItem("ta_uid");
+                if (!uid) { uid = this._uuid(); localStorage.setItem("ta_uid", uid); }
+                this.state.userId = uid;
+
+                try {
+                    const s = JSON.parse(localStorage.getItem("ta_store") || "{}");
+                    this.state.sessions = s.sessions || {};
+                    this.state.events = new Set(s.events || []);
+                    this.state.goals = new Set(s.goals || []);
+                    this.state.lastActivity = s.lastActivity || Date.now();
+                    this.state.currentSessionId = s.currentSessionId || null;
+                    this.state.hasSynced = !!s.hasSynced;
+
+                    // History Metrics
+                    this.state.firstVisit = s.firstVisit || Date.now();
+                    this.state.lastVisit = s.lastVisit || Date.now();
+                    this.state.totalVisits = s.totalVisits || 0;
+
+                    if (!this.state.currentSessionId) {
+                        this.state.totalVisits++; // Новый визит (+1 только при старте новой сессии)
+                    }
+                } catch (e) { console.error(e); }
+            },
+
+            _saveState() {
+                localStorage.setItem("ta_store", JSON.stringify({
+                    sessions: this.state.sessions,
+                    events: Array.from(this.state.events),
+                    goals: Array.from(this.state.goals),
+                    lastActivity: this.state.lastActivity,
+                    currentSessionId: this.state.currentSessionId,
+                    hasSynced: this.state.hasSynced,
+                    firstVisit: this.state.firstVisit,
+                    lastVisit: this.state.lastVisit,
+                    totalVisits: this.state.totalVisits
+                }));
+            },
+
+            _checkSessionTimeout() {
+                const now = Date.now();
+                if (!this.state.currentSessionId || now - this.state.lastActivity > this.config.sessionTimeout) {
+                    this.state.currentSessionId = this._uuid();
+                    this.state.sessions[this.state.currentSessionId] = 0;
+                    this.state.lastVisit = now; // Обновляем дату последнего визита
+                    this._log("🆕 New Session");
+                }
+                this.state.lastActivity = now;
+                this._saveState();
+            },
+
+            // --- 2. SENSORS (Mouse, Scroll, Selection) ---
+            _initSensors() {
+                // Text Selection
+                document.addEventListener('selectionchange', () => {
+                    const sel = document.getSelection();
+                    if (sel && !sel.isCollapsed) {
+                        // Debounce simple: count changes, not real precise selections to avoid spam, but close enough
+                        // Реализуем throttle
+                        if (!this._selTimeout) {
+                            this.sensors.selectionCount++;
+                            this._selTimeout = setTimeout(() => this._selTimeout = null, 1000);
+                        }
+                    }
+                });
+
+                // Mouse Velocity (Avg)
+                let lastX = 0, lastY = 0, lastTime = Date.now();
+                document.addEventListener('mousemove', (e) => {
+                    const now = Date.now();
+                    const dt = now - lastTime;
+                    if (dt > 100) { // Sample every 100ms
+                        const dist = Math.sqrt(Math.pow(e.clientX - lastX, 2) + Math.pow(e.clientY - lastY, 2));
+                        this.sensors.mouseDistance += dist;
+                        this.sensors.mouseTime += dt;
+                        lastX = e.clientX; lastY = e.clientY; lastTime = now;
+                    }
+                }, { passive: true });
+
+                // Scroll Depth & Speed
+                let lastScrollTime = Date.now();
+                window.addEventListener('scroll', () => {
+                    const scrollTop = window.scrollY;
+                    const docHeight = document.body.scrollHeight - window.innerHeight;
+                    const pct = Math.round((scrollTop / docHeight) * 100);
+                    if (pct > this.sensors.scrollMax) this.sensors.scrollMax = pct;
+
+                    // Speed calc
+                    const now = Date.now();
+                    if (now - lastScrollTime > 200) { // Throttle
+                        this.sensors.scrollTotalTime += (now - lastScrollTime);
+                        lastScrollTime = now;
+                    }
+                }, { passive: true });
+
+                // Form Monitor
+                document.addEventListener('focusin', (e) => {
+                    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                        if (!this.sensors.formStarted) {
+                            // Время от загрузки страницы (performance.now)
+                            this.sensors.formStarted = Math.round(performance.now() / 1000);
+                        }
+                    }
+                }, true);
+
+                document.addEventListener('change', (e) => {
+                    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+                        this.sensors.fieldsFilled.add(e.target.name || e.target.id || 'unknown');
+                    }
+                }, true);
+            },
+
+            // --- 3. HARDWARE & ENVIRONMENT ---
+            _initHardwareInfo() {
+                const nav = navigator;
+                const conn = nav.connection || nav.mozConnection || nav.webkitConnection || {};
+
+                this.env = {
+                    screen_width: window.screen.width,
+                    screen_height: window.screen.height,
+                    device_memory_gb: nav.deviceMemory || null, // Chrome only
+                    hardware_concurrency: nav.hardwareConcurrency || null,
+                    network_downlink: conn.downlink || null, // Mbps
+                    os_type: this._getOS(),
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    is_working_hours: this._isWorkingHours()
+                };
+            },
+
+            _getOS() {
+                const ua = navigator.userAgent;
+                if (/Windows/.test(ua)) return 'Windows';
+                if (/Macintosh/.test(ua)) return 'MacOS';
+                if (/iPhone|iPad/.test(ua)) return 'iOS';
+                if (/Android/.test(ua)) return 'Android';
+                if (/Linux/.test(ua)) return 'Linux';
+                return 'Other';
+            },
+
+            _isWorkingHours() {
+                const h = new Date().getHours();
+                const d = new Date().getDay();
+                return (d >= 1 && d <= 5) && (h >= 9 && h < 18);
+            },
+
+            // --- 4. ANALYTICS LOGIC ---
+            _determineSource() {
+                const p = new URLSearchParams(window.location.search);
+                const ref = document.referrer;
+
+                if (p.has('utm_source')) return 'Ad via UTM';
+                if (!ref || ref.includes(window.location.hostname)) return 'Direct / Type-in';
+                if (ref.includes('google') || ref.includes('yandex') || ref.includes('bing')) return 'SEO';
+                if (ref.includes('vk.com') || ref.includes('t.me') || ref.includes('youtube')) return 'Social';
+                return 'Referral';
+            },
+
+            _calculateRetention() {
+                const now = Date.now();
+                const daysFirst = Math.round((now - this.state.firstVisit) / (1000 * 60 * 60 * 24));
+                const daysLast = Math.round((now - this.state.lastVisit) / (1000 * 60 * 60 * 24));
+
+                // Визитов в неделю (примерно)
+                const weeks = Math.max(daysFirst / 7, 1);
+                const freq = (this.state.totalVisits / weeks).toFixed(1);
+
+                return {
+                    days_since_first_visit: daysFirst,
+                    days_since_last_visit: daysLast,
+                    total_sessions_count: this.state.totalVisits,
+                    visit_frequency_per_week: freq
+                };
+            },
+
+            // --- CORE CYCLE ---
+            _initTick() {
+                this._tickTimer = setInterval(() => {
+                    if (document.hidden) return;
+                    const sid = this.state.currentSessionId;
+                    if (sid) {
+                        this.state.sessions[sid] = (this.state.sessions[sid] || 0) + 1;
+                        this.state.lastActivity = Date.now();
+                        this._saveState();
+                        this._trySync();
+                    }
+                }, 1000);
+            },
+
+            async _trySync() {
+                const sid = this.state.currentSessionId;
+                const duration = this.state.sessions[sid] || 0;
+
+                // Strict 10s Rule for New Users
+                if (!this.state.hasSynced && duration < this.config.minSessionDuration) return;
+                if (!this._synced || !(Date.now() - this._lastSyncTime < this.config.syncInterval)) await this._syncToSupabase();
+            },
+
+            async _syncToSupabase() {
+                // 1. Calculate Aggregates
+                const totalSec = Object.values(this.state.sessions).reduce((a, b) => a + b, 0);
+
+                // 2. Mouse Speed (px/sec)
+                const mouseSpeed = this.sensors.mouseTime > 0
+                    ? Math.round(this.sensors.mouseDistance / (this.sensors.mouseTime / 1000))
+                    : 0;
+
+                // 3. Scroll Speed (approx)
+                // (Just sending raw data or simple score)
+
+                // 4. Data Payload
+                const enrichedData = {
+                    // Environment
+                    ...this.env,
+
+                    // Source & Geo
+                    traffic_source_type: this._determineSource(),
+                    entry_url: window.location.href, // Simplified (store first entry in session ideally)
+
+                    // Engagement / Sensors
+                    max_scroll_depth_percent: this.sensors.scrollMax,
+                    scroll_speed_avg: 0, // Placeholder, requires complex tracking logic
+                    text_selection_count: this.sensors.selectionCount,
+                    mouse_velocity_px_sec: mouseSpeed,
+
+                    // Forms
+                    form_start_time_sec: this.sensors.formStarted,
+                    fields_filled_count: this.sensors.fieldsFilled.size,
+
+                    // Loyalty / Retention
+                    ...this._calculateRetention(),
+                    total_time_sec: totalSec,
+
+                    // Standard
+                    page_title: document.title,
+                    ...this._getUTM()
+                };
+
+                const payload = {
+                    user_id: this.state.userId,
+                    sessions_history: this.state.sessions,
+                    event_name: Array.from(this.state.events).join(", "),
+                    yandex_metrika: Array.from(this.state.goals).join(", "),
+                    data: enrichedData,
+                    last_updated: new Date().toISOString()
+                };
+
+                this._log("⬆️ Sync Profile", enrichedData);
+
+                const { error } = await this.supabase.from(this.config.tableName).upsert(payload, { onConflict: "user_id" });
+                if (!error) {
+                    this._synced = true;
+                    this.state.hasSynced = true;
+                    this._saveState();
+                    this._lastSyncTime = Date.now();
+                } else {
+                    console.error("Sync error", error);
+                }
+            },
+
+            trackEvent(name) { this.state.events.add(name); this._saveState(); },
+            trackGoal(id, params) { this.state.goals.add(id); this.trackEvent("yandex_goal"); this._log("Goal", id); },
+
+            _initListeners() {
+                document.addEventListener("click", (e) => { if (e.target.closest('a, button, [role="button"]')) this.trackEvent("click"); }, true);
+                document.addEventListener("submit", () => this.trackEvent("form_submit"));
+            },
+            _initYandexMetrika() {
+                const ym = window.ym;
+                if (ym) { window.ym = (...args) => { if (args[1] === 'reachGoal') this.trackGoal(args[2], args[3]); ym(...args); } }
+            },
+            _getUTM() {
+                const p = new URLSearchParams(window.location.search);
+                return { utm_source: p.get("utm_source"), utm_medium: p.get("utm_medium"), utm_campaign: p.get("utm_campaign"), utm_content: p.get("utm_content") };
+            },
+            _uuid() { return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c == "x" ? r : (r & 0x3 | 0x8)).toString(16); }); },
+            _log(...a) { if (this.config.debug) console.log("[TA v5.0]", ...a); }
+        };
+    })();
+</script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        TildaAnalytics.init({
+            supabaseUrl: 'https://qqfyjrugrinmdijpsutj.supabase.co',
+            supabaseKey: 'sb_publishable_KzDns19CaSpI-40YZgPPCg_hCDb-1Iz',
+            yandexMetrikaId: 51854510,
+            debug: true
+        });
+    });
+</script>

@@ -1,0 +1,22 @@
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@3"></script>
+<script
+    src="https://cdn.jsdelivr.net/gh/dmitriykontekstpro-lang/collector.min.js@main/collector.min.js?v=3.0.1"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const init = () => {
+            if (typeof TildaAnalytics !== 'undefined') {
+                TildaAnalytics.init({
+                    supabaseUrl: 'https://qqfyjrugrinmdijpsutj.supabase.co',
+                    supabaseKey: 'sb_publishable_KzDns19CaSpI-40YZgPPCg_hCDb-1Iz',
+                    yandexMetrikaId: 51854511,
+                    debug: true
+                });
+                console.log('✅ Tilda Analytics v3 initialized');
+            } else {
+                setTimeout(init, 100);
+            }
+        };
+        init();
+    });
+</script>

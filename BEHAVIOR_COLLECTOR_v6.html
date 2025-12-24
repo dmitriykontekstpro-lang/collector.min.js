@@ -1,0 +1,304 @@
+<!-- Библиотеки -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<!-- Tilda Analytics v6.1 (Behavioral AI / ML Ready) -->
+<!-- Features: Strict 10s Rule, One Table, Full Device Info, Behavioral Sensors -->
+<script>
+    (function () {
+        'use strict';
+        window.TildaAnalytics = {
+            config: null, supabase: null,
+            state: {
+                userId: null, currentSessionId: null, sessions: {}, events: new Set, goals: new Set,
+                hasSynced: false, firstVisit: null, lastVisit: null, totalVisits: 0
+            },
+            // Sensors state
+            behavior: {
+                scrollMax: 0, selectionCount: 0, mouseDistance: 0, mouseTime: 0,
+                formStarted: null, fieldsFilled: new Set(), lastScrollY: 0,
+
+                // Behavioral AI Signals
+                rageClicks: 0,
+                tabSwitches: 0,
+                tabHiddenTime: 0,
+                hoverHesitationTime: 0,
+                scrollDirectionChanges: 0,
+                textCopiedCount: 0
+            },
+            _synced: false, _syncTimer: null, _tickTimer: null,
+
+            // Internal Detection Vars
+            _lastClick: { time: 0, x: 0, y: 0 },
+            _hoverStart: null,
+            _hiddenStart: null,
+            _lastScrollDir: 1,
+
+            async init(e) {
+                this.config = { supabaseUrl: "", supabaseKey: "", tableName: "analytics", minSessionDuration: 10, sessionTimeout: 12e5, syncInterval: 1e4, debug: false, yandexMetrikaId: null, ...e };
+                if (typeof supabase !== 'undefined') {
+                    this.supabase = supabase.createClient(this.config.supabaseUrl, this.config.supabaseKey);
+                    this._loadState();
+                    this._checkSessionTimeout();
+                    this._initHardwareInfo();
+                    this._initBehaviorSensors();
+                    this._initTick();
+                    this._initListeners();
+                    if (this.config.yandexMetrikaId) this._initYandexMetrika();
+                    this._log("🧠 Init v6.1 AI-Behavior");
+                    this.trackEvent("page_view");
+                }
+            },
+
+            // --- 1. STATE & STORAGE ---
+            _loadState() {
+                let uid = localStorage.getItem("ta_uid");
+                if (!uid) { uid = this._uuid(); localStorage.setItem("ta_uid", uid); }
+                this.state.userId = uid;
+                try {
+                    const s = JSON.parse(localStorage.getItem("ta_store") || "{}");
+                    this.state.sessions = s.sessions || {};
+                    this.state.events = new Set(s.events || []);
+                    this.state.goals = new Set(s.goals || []);
+                    this.state.lastActivity = s.lastActivity || Date.now();
+                    this.state.currentSessionId = s.currentSessionId || null;
+                    this.state.hasSynced = !!s.hasSynced;
+                    this.state.firstVisit = s.firstVisit || Date.now();
+                    this.state.lastVisit = s.lastVisit || Date.now();
+                    this.state.totalVisits = s.totalVisits || 0;
+                    if (!this.state.currentSessionId) this.state.totalVisits++;
+                } catch (e) { }
+            },
+
+            _saveState() {
+                localStorage.setItem("ta_store", JSON.stringify({
+                    sessions: this.state.sessions, events: Array.from(this.state.events), goals: Array.from(this.state.goals),
+                    lastActivity: this.state.lastActivity, currentSessionId: this.state.currentSessionId, hasSynced: this.state.hasSynced,
+                    firstVisit: this.state.firstVisit, lastVisit: this.state.lastVisit, totalVisits: this.state.totalVisits
+                }));
+            },
+
+            _checkSessionTimeout() {
+                const now = Date.now();
+                if (!this.state.currentSessionId || now - this.state.lastActivity > this.config.sessionTimeout) {
+                    this.state.currentSessionId = this._uuid();
+                    this.state.sessions[this.state.currentSessionId] = 0;
+                    this.state.lastVisit = now;
+                    this._log("🆕 New Session");
+                }
+                this.state.lastActivity = now;
+                this._saveState();
+            },
+
+            // --- 2. SENSORS ---
+            _initBehaviorSensors() {
+                // Rage Clicks (Rapid clicks in same spot)
+                document.addEventListener('click', (e) => {
+                    const now = Date.now();
+                    const dist = Math.sqrt(Math.pow(e.clientX - this._lastClick.x, 2) + Math.pow(e.clientY - this._lastClick.y, 2));
+                    // 3 clicks within 600ms = Rage
+                    if (now - this._lastClick.time < 300 && dist < 20) {
+                        this.behavior.rageClicks++;
+                        this._log("😡 Rage Click");
+                    }
+                    this._lastClick = { time: now, x: e.clientX, y: e.clientY };
+                    if (e.target.closest('a, button')) this.trackEvent("click");
+                }, true);
+
+                // Tab Switching
+                document.addEventListener("visibilitychange", () => {
+                    if (document.hidden) {
+                        this.behavior.tabSwitches++;
+                        this._hiddenStart = Date.now();
+                    } else {
+                        if (this._hiddenStart) {
+                            this.behavior.tabHiddenTime += (Date.now() - this._hiddenStart);
+                            this._hiddenStart = null;
+                        }
+                    }
+                });
+
+                // Hover Hesitation (Indecision)
+                document.body.addEventListener('mouseover', (e) => {
+                    if (e.target.closest('a, button, .t-btn, input')) this._hoverStart = Date.now();
+                });
+                document.body.addEventListener('mouseout', (e) => {
+                    if (this._hoverStart && e.target.closest('a, button, .t-btn, input')) {
+                        const diff = Date.now() - this._hoverStart;
+                        if (diff > 400 && diff < 8000) this.behavior.hoverHesitationTime += diff;
+                        this._hoverStart = null;
+                    }
+                });
+
+                // Copy & Selection
+                document.addEventListener('copy', () => this.behavior.textCopiedCount++);
+                document.addEventListener('selectionchange', () => {
+                    const s = document.getSelection();
+                    if (s && !s.isCollapsed && !this._selDebounce) {
+                        this.behavior.selectionCount++;
+                        this._selDebounce = setTimeout(() => this._selDebounce = null, 500);
+                    }
+                });
+
+                // Mouse Stats (Throttle 100ms)
+                let lastX = 0, lastY = 0, lastT = Date.now();
+                document.addEventListener('mousemove', (e) => {
+                    const now = Date.now(), dt = now - lastT;
+                    if (dt > 100) {
+                        const dist = Math.sqrt(Math.pow(e.clientX - lastX, 2) + Math.pow(e.clientY - lastY, 2));
+                        this.behavior.mouseDistance += dist;
+                        this.behavior.mouseTime += dt;
+                        lastX = e.clientX; lastY = e.clientY; lastT = now;
+                    }
+                }, { passive: true });
+
+                // Scroll Pattern
+                window.addEventListener('scroll', () => {
+                    const st = window.scrollY;
+                    const dir = st > this.behavior.lastScrollY ? 1 : -1;
+                    if (dir !== this._lastScrollDir && Math.abs(st - this.behavior.lastScrollY) > 50) {
+                        this.behavior.scrollDirectionChanges++;
+                        this._lastScrollDir = dir;
+                    }
+                    const docH = document.body.scrollHeight - window.innerHeight;
+                    const pct = Math.round((st / docH) * 100);
+                    if (pct > this.behavior.scrollMax) this.behavior.scrollMax = pct;
+                    this.behavior.lastScrollY = st;
+                }, { passive: true });
+
+                // Forms
+                document.addEventListener('focusin', (e) => {
+                    if (/INPUT|TEXTAREA/.test(e.target.tagName) && !this.behavior.formStarted)
+                        this.behavior.formStarted = Math.round(performance.now() / 1000);
+                }, true);
+                document.addEventListener('change', (e) => {
+                    if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) this.behavior.fieldsFilled.add(e.target.name || e.target.id);
+                }, true);
+            },
+
+            // --- 3. HARDWARE & ENV ---
+            _initHardwareInfo() {
+                const nav = navigator, conn = nav.connection || {};
+                this.env = {
+                    screen_width: window.screen.width,
+                    screen_height: window.screen.height,
+                    device_memory_gb: nav.deviceMemory || null,
+                    hardware_concurrency: nav.hardwareConcurrency || null,
+                    network_downlink: conn.downlink || null,
+                    os_type: this._getOS(),
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    is_working_hours: this._isWorkingHours()
+                };
+            },
+            _getOS() {
+                const ua = navigator.userAgent;
+                if (/Windows/.test(ua)) return 'Windows';
+                if (/Macintosh/.test(ua)) return 'MacOS';
+                if (/iPhone|iPad/.test(ua)) return 'iOS';
+                if (/Android/.test(ua)) return 'Android';
+                return 'Other';
+            },
+            _isWorkingHours() { const h = new Date().getHours(), d = new Date().getDay(); return (d >= 1 && d <= 5) && (h >= 9 && h < 18); },
+
+            // --- 4. DATA SYNC ---
+            _initTick() {
+                this._tickTimer = setInterval(() => {
+                    if (document.hidden) return;
+                    const sid = this.state.currentSessionId;
+                    if (sid) {
+                        this.state.sessions[sid] = (this.state.sessions[sid] || 0) + 1;
+                        this.state.lastActivity = Date.now();
+                        this._saveState();
+                        this._trySync();
+                    }
+                }, 1000);
+            },
+
+            async _trySync() {
+                const sid = this.state.currentSessionId, dur = this.state.sessions[sid] || 0;
+                if (!this.state.hasSynced && dur < this.config.minSessionDuration) return;
+                if (!this._synced || !(Date.now() - this._lastSyncTime < this.config.syncInterval)) await this._syncToSupabase();
+            },
+
+            async _syncToSupabase() {
+                const totalSec = Object.values(this.state.sessions).reduce((a, b) => a + b, 0);
+
+                // Calculations
+                const focusT = totalSec * 1000;
+                const totalDT = focusT + this.behavior.tabHiddenTime;
+                const focusPct = totalDT > 0 ? Math.round((focusT / totalDT) * 100) : 100;
+                const mouseSpeed = this.behavior.mouseTime > 0 ? Math.round(this.behavior.mouseDistance / (this.behavior.mouseTime / 1000)) : 0;
+
+                // Final Data Object (Exact Names as requested)
+                const enrichedData = {
+                    ...this.env, ...this._getUTM(),
+
+                    traffic_source_type: this._determineSource(),
+                    entry_url: window.location.href,
+                    page_title: document.title,
+
+                    // Session
+                    total_time_sec: totalSec,
+                    total_sessions_count: this.state.totalVisits,
+                    days_since_first_visit: Math.round((Date.now() - this.state.firstVisit) / (864e5)),
+                    days_since_last_visit: Math.round((Date.now() - this.state.lastVisit) / (864e5)),
+                    visit_frequency_per_week: (this.state.totalVisits / Math.max(1, (Date.now() - this.state.firstVisit) / (864e5 * 7))).toFixed(1),
+
+                    // Behavioral
+                    rage_click_count: this.behavior.rageClicks,
+                    tab_switch_count: this.behavior.tabSwitches,
+                    focus_time_percent: focusPct,
+                    hover_hesitation_sec: Math.round(this.behavior.hoverHesitationTime / 1000),
+                    mouse_velocity_px_sec: mouseSpeed,
+                    text_selection_count: this.behavior.selectionCount,
+                    text_copied_count: this.behavior.textCopiedCount,
+
+                    max_scroll_depth_percent: this.behavior.scrollMax,
+                    scroll_speed_avg: 0, // Placeholder
+                    scroll_direction_changes: this.behavior.scrollDirectionChanges,
+
+                    form_start_time_sec: this.behavior.formStarted,
+                    fields_filled_count: this.behavior.fieldsFilled.size
+                };
+
+                const payload = {
+                    user_id: this.state.userId,
+                    sessions_history: this.state.sessions,
+                    event_name: Array.from(this.state.events).join(", "),
+                    yandex_metrika: Array.from(this.state.goals).join(", "),
+                    data: enrichedData,
+                    last_updated: new Date().toISOString()
+                };
+
+                this._log("🧠 Sync ML Data", enrichedData);
+                const { error } = await this.supabase.from(this.config.tableName).upsert(payload, { onConflict: "user_id" });
+                if (!error) { this._synced = true; this.state.hasSynced = true; this._saveState(); this._lastSyncTime = Date.now(); }
+            },
+
+            _determineSource() {
+                const r = document.referrer;
+                if (!r || r.includes(location.hostname)) return 'Direct';
+                if (/google|yandex|bing/.test(r)) return 'SEO';
+                if (/vk|t\.me|youtube/.test(r)) return 'Social';
+                return 'Referral';
+            },
+
+            trackEvent(e) { this.state.events.add(e); this._saveState() }, trackGoal(e) { this.state.goals.add(e); this.trackEvent("yandex_goal") },
+            _initListeners() { document.addEventListener("submit", () => this.trackEvent("form_submit")); },
+            _initYandexMetrika() { const e = window.ym; if (e) { window.ym = (...t) => { "reachGoal" === t[1] && this.trackGoal(t[2]), e(...t) } } },
+            _getUTM() { const e = new URLSearchParams(location.search); return { utm_source: e.get("utm_source"), utm_medium: e.get("utm_medium"), utm_campaign: e.get("utm_campaign"), utm_content: e.get("utm_content") } },
+            _uuid() { return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (e => { const t = 16 * Math.random() | 0; return ("x" == e ? t : 3 & t | 8).toString(16) })) },
+            _log(...e) { this.config.debug && console.log("[TA v6.1]", ...e) }
+        };
+    })();
+</script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        TildaAnalytics.init({
+            supabaseUrl: 'https://qqfyjrugrinmdijpsutj.supabase.co',
+            supabaseKey: 'sb_publishable_KzDns19CaSpI-40YZgPPCg_hCDb-1Iz',
+            yandexMetrikaId: 51854510,
+            debug: true
+        });
+    });
+</script>

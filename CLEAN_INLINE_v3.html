@@ -1,0 +1,28 @@
+<!-- Библиотеки -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@3"></script>
+
+<!-- Tilda Analytics v3 (ВСТРОЕННЫЙ КОД) -->
+<script>
+    (function () { 'use strict'; window.TildaAnalytics = { version: '3.0.0', config: null, supabase: null, userId: null, sessionId: null, context: {}, _eventBuffer: [], async init(config) { this.config = { supabaseUrl: '', supabaseKey: '', tableName: 'analytics', debug: false, batchInterval: 5000, yandexMetrikaId: null, ...config }; if (typeof supabase === 'undefined') { console.error('Supabase client not loaded'); return; } this.supabase = supabase.createClient(this.config.supabaseUrl, this.config.supabaseKey); this._initIdentity(); this._initContext(); this._trackEvent('session_start'); this._trackEvent('page_view'); this._initListeners(); this._initBatchSender(); if (this.config.yandexMetrikaId) this._initYandexMetrika(); }, _initIdentity() { let uid = localStorage.getItem('ta_uid'); if (!uid) { uid = this._uuid(); localStorage.setItem('ta_uid', uid); } this.userId = uid; let sid = sessionStorage.getItem('ta_sid'); if (!sid) { sid = this._uuid(); sessionStorage.setItem('ta_sid', sid); } this.sessionId = sid; }, _initContext() { this.context = { ua: navigator.userAgent, screen: `${window.screen.width}x${window.screen.height}`, language: navigator.language, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, is_mobile: /Mobile|Android|iPhone/i.test(navigator.userAgent), referrer: document.referrer || null, ...this._getUTM(), entry_url: window.location.href }; }, _getUTM() { const p = new URLSearchParams(window.location.search); return { utm_source: p.get('utm_source'), utm_medium: p.get('utm_medium'), utm_campaign: p.get('utm_campaign'), utm_content: p.get('utm_content'), utm_term: p.get('utm_term'), yclid: p.get('yclid'), gclid: p.get('gclid') }; }, _trackEvent(name, props = {}) { const event = { event_name: name, user_id: this.userId, session_id: this.sessionId, page_url: window.location.href, created_at: new Date().toISOString(), data: { ...this.context, ...props, page_title: document.title } }; this._eventBuffer.push(event); if (this.config.debug) console.log('[TildaAnalytics]', name); if (this._eventBuffer.length >= 5 || ['form_submit', 'yandex_goal'].includes(name)) { this._flush(); } }, async _flush() { if (!this._eventBuffer.length) return; const events = [...this._eventBuffer]; this._eventBuffer = []; const { error } = await this.supabase.from(this.config.tableName).insert(events); if (error) { console.error('Send error:', error); } else if (this.config.debug) { console.log(`Sent ${events.length} events`); } }, _initBatchSender() { setInterval(() => this._flush(), this.config.batchInterval); window.addEventListener('beforeunload', () => this._flush()); }, _initListeners() { document.addEventListener('click', (e) => { const target = e.target.closest('a, button, .t-btn, [role="button"]'); if (target) { this._trackEvent('click', { text: target.innerText || '', href: target.getAttribute('href'), id: target.id, class: target.className }); } }, true); let scrollTimeout; window.addEventListener('scroll', () => { clearTimeout(scrollTimeout); scrollTimeout = setTimeout(() => { this._trackEvent('scroll', { depth_px: window.scrollY, depth_pct: Math.round((window.scrollY / (document.body.scrollHeight - window.innerHeight)) * 100) }); }, 1000); }); document.addEventListener('submit', (e) => { const form = e.target; const formData = new FormData(form); const data = {}; formData.forEach((v, k) => { if (k.includes('email') || k.includes('phone') || k.includes('name')) data[k] = v; }); this._trackEvent('form_submit', { form_id: form.id, form_data: data }); }); }, _initYandexMetrika() { const originalYm = window.ym; if (!originalYm) return; window.ym = (...args) => { if (args[1] === 'reachGoal') { this._trackEvent('yandex_goal', { goal_name: args[2], goal_params: args[3], ym_id: args[0] }); } originalYm(...args); }; }, _uuid() { return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }); } } })();
+</script>
+
+<!-- Инициализация -->
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const init = () => {
+            if (typeof TildaAnalytics !== 'undefined') {
+                TildaAnalytics.init({
+                    supabaseUrl: 'https://qqfyjrugrinmdijpsutj.supabase.co',
+                    supabaseKey: 'sb_publishable_KzDns19CaSpI-40YZgPPCg_hCDb-1Iz',
+                    yandexMetrikaId: 51854510,
+                    debug: true
+                });
+                console.log('✅ Tilda Analytics v3 initialized (Inline)');
+            } else {
+                setTimeout(init, 100);
+            }
+        };
+        init();
+    });
+</script>
