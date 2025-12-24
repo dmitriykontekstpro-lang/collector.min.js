@@ -1,0 +1,23 @@
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+    (function () {
+        var CONFIG = {
+            supabaseUrl: 'https://qqfyjrugrinmdijpsutj.supabase.co',
+            supabaseKey: 'sb_publishable_KzDns19CaSpI-40YZgPPCg_hCDb-1Iz',
+            yandexMetrikaId: 51854510,
+            debug: true
+        };
+
+        var script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/gh/dmitriykontekstpro-lang/collector.min.js@master/tilda-analytics.js';
+        script.async = true;
+
+        script.onload = function () {
+            if (window.TildaAnalytics) {
+                window.TildaAnalytics.init(CONFIG);
+            }
+        };
+
+        document.head.appendChild(script);
+    })();
+</script>

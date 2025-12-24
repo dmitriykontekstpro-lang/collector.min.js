@@ -1,0 +1,38 @@
+<!-- Библиотеки -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<!-- Tilda Analytics Loader (Loads v7.0 from GitHub) -->
+<script>
+    (function () {
+        // 1. Конфигурация (Ваши ключи живут тут)
+        var CONFIG = {
+            supabaseUrl: 'https://qqfyjrugrinmdijpsutj.supabase.co',
+            supabaseKey: 'sb_publishable_KzDns19CaSpI-40YZgPPCg_hCDb-1Iz',
+            yandexMetrikaId: 51854510,
+            debug: true
+        };
+
+        // 2. Создаем скрипт загрузчик
+        var script = document.createElement('script');
+        // Ссылка на ваш код на GitHub (через CDN)
+        script.src = 'https://cdn.jsdelivr.net/gh/dmitriykontekstpro-lang/collector.min.js@master/tilda-analytics.js';
+        script.async = true;
+
+        // 3. Когда загрузится - запускаем
+        script.onload = function () {
+            if (window.TildaAnalytics) {
+                window.TildaAnalytics.init(CONFIG);
+                console.log("✅ Tilda Analytics Loaded from GitHub");
+            } else {
+                console.error("❌ Failed to load Tilda Analytics: window.TildaAnalytics is undefined");
+            }
+        };
+
+        script.onerror = function () {
+            console.error("❌ Failed to load script from jsDelivr. Check GitHub repository URL.");
+        };
+
+        // 4. Вставляем в страницу
+        document.head.appendChild(script);
+    })();
+</script>
