@@ -255,3 +255,4 @@
     _log(...e) { this.config.debug && console.log("[TA v7.2]", ...e) }
   };
 })();
+// ✅ Auto-Sync Verified

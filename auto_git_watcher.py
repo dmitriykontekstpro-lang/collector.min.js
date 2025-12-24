@@ -13,24 +13,37 @@ def get_file_mtime(path):
         return 0
 
 def run_git_commands():
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] ⚡ Detected change! Pushing to GitHub...")
+    timestamp = datetime.now().strftime('%H:%M:%S')
+    print(f"[{timestamp}] ⚡ Detected change! Pushing to GitHub...")
     
+    log_content = []
+    
+    def run_cmd(args, name):
+        result = subprocess.run(args, shell=True, capture_output=True, text=True)
+        log_content.append(f"--- {name} ---\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}\n")
+        return result.returncode == 0
+
     # 1. Add
-    if subprocess.call(["git", "add", "."], shell=True) != 0:
+    if not run_cmd(["git", "add", "."], "GIT ADD"):
         print("❌ Git Add failed")
         return
 
     # 2. Commit
     msg = f"Auto-update {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-    if subprocess.call(["git", "commit", "-m", msg], shell=True) != 0:
-        print("⚠️ Nothing to commit")
-        # Не возвращаем return, пробуем пуш (вдруг коммит уже был)
+    run_cmd(["git", "commit", "-m", msg], "GIT COMMIT") 
+    # Ignore output for commit (it might be empty if nothing to commit)
 
     # 3. Push
-    if subprocess.call(["git", "push"], shell=True) == 0:
-        print("✅ Successfully pushed to GitHub!")
+    if run_cmd(["git", "push"], "GIT PUSH"):
+        print("✅ Successfully pushed!")
+        log_content.append("RESULT: SUCCESS")
     else:
         print("❌ Git Push failed")
+        log_content.append("RESULT: FAILED")
+        
+    # Write to log file for the AI Agent
+    with open("watcher_status.log", "w", encoding="utf-8") as f:
+        f.write("\n".join(log_content))
 
 def main():
     print(f"👀 Watching '{WATCH_FILE}' for changes...")
