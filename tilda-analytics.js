@@ -42,7 +42,7 @@
         this._initYandexMetrika();
         this._fetchYandexClientID();
       }
-      this._log("🚀 Init v7.1 (Exit Tracker)");
+      this._log("🚀 Init v7.2 (Auto-Sync Active)");
       this.trackEvent("page_view");
     },
 
@@ -242,7 +242,7 @@
         last_updated: new Date().toISOString()
       };
 
-      this._log("⭐ Sync v7.0 (GitHub)", data);
+      this._log("⭐ Sync v7.2", data);
       await this.supabase.from(this.config.tableName).upsert(payload, { onConflict: "user_id" });
       this._synced = true; this.state.hasSynced = true; this._saveState(); this._lastSyncTime = Date.now();
     },
@@ -252,6 +252,6 @@
     _initListeners() { document.addEventListener("submit", () => this.trackEvent("form_submit")) },
     _getUTM() { const e = new URLSearchParams(location.search); return { utm_source: e.get("utm_source"), utm_medium: e.get("utm_medium"), utm_campaign: e.get("utm_campaign"), utm_content: e.get("utm_content") } },
     _uuid() { return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, e => { const t = 16 * Math.random() | 0; return ("x" == e ? t : 3 & t | 8).toString(16) }) },
-    _log(...e) { this.config.debug && console.log("[TA v7.0]", ...e) }
+    _log(...e) { this.config.debug && console.log("[TA v7.2]", ...e) }
   };
 })();
