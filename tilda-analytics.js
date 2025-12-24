@@ -1,5 +1,5 @@
 /**
- * Tilda Analytics v7.1 (GitHub Hosted)
+ * Tilda Analytics v7.2 (Auto-Sync)
  * Hosted at: https://github.com/dmitriykontekstpro-lang/collector.min.js
  */
 (function () {
