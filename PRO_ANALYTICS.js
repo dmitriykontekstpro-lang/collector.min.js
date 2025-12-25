@@ -1,11 +1,11 @@
 /**
- * Tilda Analytics PRO v7.7 (DOM Ready Fix)
+ * Tilda Analytics PRO v7.8 (Key Debug)
  * Hosted at: https://github.com/dmitriykontekstpro-lang/collector.min.js
  */
 (function () {
     'use strict';
 
-    const TA_VERSION = "v7.7-PRO";
+    const TA_VERSION = "v7.8-PRO";
 
     const App = {
         config: null,
@@ -42,6 +42,11 @@
                 console.warn('[TA] Supabase not loaded yet, waiting...');
                 setTimeout(() => this.init(e), 500);
                 return;
+            }
+
+            // DEBUG: Проверка ключа
+            if (this.config.debug) {
+                console.log(`[TA] Key check: ${this.config.supabaseKey ? this.config.supabaseKey.substring(0, 15) + '...' : 'MISSING'}`);
             }
 
             this.supabase = supabase.createClient(this.config.supabaseUrl, this.config.supabaseKey);
