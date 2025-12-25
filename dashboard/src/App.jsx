@@ -95,21 +95,21 @@ function App() {
 
     // --- TAB 2: DATA GRID METRICS ---
     const numerics = [
-      { label: 'Total Visits', val: totalUsers, icon: Users },
-      { label: 'Leads (Goals)', val: filteredData.filter(r => r.data?.is_lead).length, icon: Target, color: '#34d399' },
-      { label: 'Avg Time (sec)', val: avg('total_time_sec'), icon: Clock },
-      { label: 'Avg Scroll Depth (%)', val: avg('max_scroll_depth_percent'), icon: Activity },
-      { label: 'Rage Clicks (Total)', val: sum('rage_click_count'), icon: AlertOctagon, color: '#f87171' },
-      { label: 'Tab Switches', val: sum('tab_switch_count'), icon: Layers },
-      { label: 'Avg Mouse Speed', val: avg('mouse_velocity_px_sec'), icon: MousePointer2 },
-      { label: 'Form Starts', val: filteredData.filter(r => r.data?.form_start_time_sec).length, icon: Hash },
-      { label: 'Fields Filled (Total)', val: sum('fields_filled_count'), icon: Hash },
-      { label: 'Text Copied (Total)', val: sum('text_copied_count'), icon: Hash },
-      { label: 'Hover Hesitation (sec)', val: avg('hover_hesitation_sec'), icon: Clock },
-      { label: 'Visits (9-18h)', val: filteredData.filter(r => r.data?.is_working_hours).length, icon: Sun },
-      { label: 'Visits (Night)', val: totalUsers - filteredData.filter(r => r.data?.is_working_hours).length, icon: Moon },
-      { label: 'Mobile Users', val: devices.Mobile, icon: Smartphone },
-      { label: 'Desktop Users', val: devices.Desktop, icon: Laptop },
+      { label: 'Всего визитов', val: totalUsers, icon: Users },
+      { label: 'Лиды (Цели)', val: filteredData.filter(r => r.data?.is_lead).length, icon: Target, color: '#34d399' },
+      { label: 'Ср. время (сек)', val: avg('total_time_sec'), icon: Clock },
+      { label: 'Ср. глубина скролла (%)', val: avg('max_scroll_depth_percent'), icon: Activity },
+      { label: 'Ярость кликов (всего)', val: sum('rage_click_count'), icon: AlertOctagon, color: '#f87171' },
+      { label: 'Переключений вкладок', val: sum('tab_switch_count'), icon: Layers },
+      { label: 'Ср. скорость мыши', val: avg('mouse_velocity_px_sec'), icon: MousePointer2 },
+      { label: 'Начали заполнять форму', val: filteredData.filter(r => r.data?.form_start_time_sec).length, icon: Hash },
+      { label: 'Полей заполнено (всего)', val: sum('fields_filled_count'), icon: Hash },
+      { label: 'Текста скопировано (всего)', val: sum('text_copied_count'), icon: Hash },
+      { label: 'Колебание курсора (сек)', val: avg('hover_hesitation_sec'), icon: Clock },
+      { label: 'Визиты (9-18ч)', val: filteredData.filter(r => r.data?.is_working_hours).length, icon: Sun },
+      { label: 'Визиты (ночь)', val: totalUsers - filteredData.filter(r => r.data?.is_working_hours).length, icon: Moon },
+      { label: 'Мобильные', val: devices.Mobile, icon: Smartphone },
+      { label: 'Десктоп', val: devices.Desktop, icon: Laptop },
     ];
 
     return {
@@ -137,7 +137,7 @@ function App() {
       // Transform analytics data to ML format
       const mlRows = filteredData.map(row => {
         const d = row.data || {};
-        
+
         return {
           target_is_lead: d.is_lead || false,
           total_time_sec: d.total_time_sec || 0,
@@ -189,7 +189,7 @@ function App() {
     <div className="dashboard-container">
       <header className="header">
         <h1>FitBase & ML-Data</h1>
-        <p style={{ color: 'var(--text-secondary)' }}>Advanced Behavioral Analytics</p>
+        <p style={{ color: 'var(--text-secondary)' }}>Продвинутая поведенческая аналитика</p>
       </header>
 
       {/* FILTERS */}
@@ -221,40 +221,40 @@ function App() {
       </div>
 
       {/* ML EXPORT BUTTON */}
-      <div style={{marginBottom: '1.5rem', display: 'flex', gap: '1rem', alignItems: 'center'}}>
-          <button 
-              onClick={handleExportML} 
-              disabled={isExporting || !filteredData.length}
-              style={{
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  border: 'none',
-                  color: '#fff',
-                  padding: '0.8rem 1.5rem',
-                  borderRadius: '0.5rem',
-                  cursor: isExporting ? 'not-allowed' : 'pointer',
-                  fontWeight: '600',
-                  fontSize: '0.95rem',
-                  opacity: isExporting ? 0.6 : 1,
-                  transition: 'all 0.2s',
-                  boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)'
-              }}
-          >
-              {isExporting ? '⏳ Экспортируем...' : '🚀 Подготовить DS для ML'}
-          </button>
-          {exportStatus && (
-              <span style={{color: exportStatus.includes('✅') ? '#34d399' : '#f87171', fontSize: '0.9rem'}}>
-                  {exportStatus}
-              </span>
-          )}
+      <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+        <button
+          onClick={handleExportML}
+          disabled={isExporting || !filteredData.length}
+          style={{
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            border: 'none',
+            color: '#fff',
+            padding: '0.8rem 1.5rem',
+            borderRadius: '0.5rem',
+            cursor: isExporting ? 'not-allowed' : 'pointer',
+            fontWeight: '600',
+            fontSize: '0.95rem',
+            opacity: isExporting ? 0.6 : 1,
+            transition: 'all 0.2s',
+            boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)'
+          }}
+        >
+          {isExporting ? '⏳ Экспортируем...' : '🚀 Подготовить DS для ML'}
+        </button>
+        {exportStatus && (
+          <span style={{ color: exportStatus.includes('✅') ? '#34d399' : '#f87171', fontSize: '0.9rem' }}>
+            {exportStatus}
+          </span>
+        )}
       </div>
 
       {/* TABS SWITCHER */}
       <div className="tabs-container">
         <button className={`tab-btn ${activeTab === 'behavior' ? 'active' : ''}`} onClick={() => setActiveTab('behavior')}>
-          🚀 Behavior & Profiling
+          🚀 Поведение и Профили
         </button>
         <button className={`tab-btn ${activeTab === 'data' ? 'active' : ''}`} onClick={() => setActiveTab('data')}>
-          📊 Raw Numerics (Data)
+          📊 Сырые данные (Метрики)
         </button>
       </div>
 
@@ -295,7 +295,7 @@ function App() {
               <h2 className="section-title">📱 2. Устройства и Технологии</h2>
               <div className="charts-grid" style={{ marginBottom: '3rem' }}>
                 <div className="card">
-                  <h3>Mobile vs Desktop</h3>
+                  <h3>Мобильные vs Десктоп</h3>
                   <div className="chart-container">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
@@ -306,7 +306,7 @@ function App() {
                       </PieChart>
                     </ResponsiveContainer>
                     <div style={{ textAlign: 'center', color: '#94a3b8' }}>
-                      <span style={{ color: '#f472b6' }}>Mobile</span> vs <span style={{ color: '#38bdf8' }}>Desktop</span>
+                      <span style={{ color: '#f472b6' }}>Мобильные</span> vs <span style={{ color: '#38bdf8' }}>Десктоп</span>
                     </div>
                   </div>
                 </div>
@@ -348,7 +348,7 @@ function App() {
           {/* --- TAB 2: DATA GRID --- */}
           {activeTab === 'data' && (
             <div className="animate-fade-in">
-              <h2 className="section-title">📊 Raw Data Metrics</h2>
+              <h2 className="section-title">📊 Сырые метрики данных</h2>
               <div className="data-grid-full">
                 {stats.numerics.map((item, i) => (
                   <div key={i} className="data-card-mini">

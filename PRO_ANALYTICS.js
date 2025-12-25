@@ -1,11 +1,11 @@
 /**
- * Tilda Analytics PRO v7.4 (Cache Buster Edition)
+ * Tilda Analytics PRO v7.5 (Enhanced Tracking)
  * Hosted at: https://github.com/dmitriykontekstpro-lang/collector.min.js
  */
 (function () {
     'use strict';
 
-    const TA_VERSION = "v7.4-PRO";
+    const TA_VERSION = "v7.5-PRO";
 
     const App = {
         config: null,
@@ -236,6 +236,7 @@
             const data = {
                 ...this.env, ...this._getUTM(),
                 ym_client_id: this.state.ymClientId,
+                yandex_goals: Array.from(this.state.goals).join(", "), // Цели Метрики
                 is_lead: this.state.isLead,
                 traffic_source_type: this._determineSource(),
                 entry_url: window.location.href, page_title: document.title,
@@ -271,7 +272,18 @@
         },
 
         _determineSource() { const r = document.referrer; if (!r || r.includes(location.hostname)) return 'Direct'; if (/google|yandex|bing/.test(r)) return 'SEO'; return 'Referral' },
-        _getUTM() { const e = new URLSearchParams(location.search); return { utm_source: e.get("utm_source"), utm_medium: e.get("utm_medium"), utm_campaign: e.get("utm_campaign"), utm_content: e.get("utm_content") } },
+        _getUTM() {
+            const e = new URLSearchParams(location.search);
+            return {
+                utm_source: e.get("utm_source"),
+                utm_medium: e.get("utm_medium"),
+                utm_campaign: e.get("utm_campaign"),
+                utm_content: e.get("utm_content"),
+                yclid: e.get("yclid"),  // Яндекс Click ID
+                gclid: e.get("gclid"),  // Google Click ID
+                fbclid: e.get("fbclid") // Facebook Click ID
+            }
+        },
         _uuid() { return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, e => { const t = 16 * Math.random() | 0; return ("x" == e ? t : 3 & t | 8).toString(16) }) },
         _log(...e) { this.config.debug && console.log(`[TA ${this.version}]`, ...e) }
     };
