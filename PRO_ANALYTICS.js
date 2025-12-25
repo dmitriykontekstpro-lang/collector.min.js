@@ -204,7 +204,8 @@
                     const fieldName = e.target.name || e.target.id || e.target.placeholder || 'unnamed_field';
                     this.behavior.fieldsFilled.add(fieldName);
 
-                    // Собираем значение с маскировкой чувствительных данных
+
+                    // Собираем значение с маскировкой ТОЛЬКО чувствительных данных (пароли, карты)
                     let value = e.target.value || '';
                     const type = e.target.type?.toLowerCase();
 
@@ -216,9 +217,9 @@
                     else if (fieldName.match(/card|карт/i) && value.match(/^\d{13,19}$/)) {
                         value = '****' + value.slice(-4);
                     }
-                    // Ограничиваем длину текста
-                    else if (value.length > 200) {
-                        value = value.substring(0, 200) + '...';
+                    // Ограничиваем длину текста (для защиты от огромных полей)
+                    else if (value.length > 500) {
+                        value = value.substring(0, 500) + '...';
                     }
 
                     this.behavior.formData[fieldName] = value;
