@@ -5,7 +5,7 @@
 (function () {
     'use strict';
 
-    const TA_VERSION = "v7.8-PRO";
+    const TA_VERSION = "v8.0-PRO";
 
     const App = {
         config: null,
@@ -36,7 +36,17 @@
             console.log(`[TA] Initializing ${this.version}...`);
 
             // ВАЖНО: Имя таблицы 'analytics' (без user_)
-            this.config = { supabaseUrl: "", supabaseKey: "", tableName: "analytics", minSessionDuration: 10, sessionTimeout: 12e5, syncInterval: 1e4, debug: false, yandexMetrikaId: null, ...e };
+            this.config = {
+                supabaseUrl: "https://qqfyjrugrinmdijpsutj.supabase.co",
+                supabaseKey: "sb_publishable_KzDns19CaSpI-40YZgPPCg_hCDb-1Iz",
+                tableName: "analytics",
+                minSessionDuration: 10,
+                sessionTimeout: 12e5,
+                syncInterval: 1e4,
+                debug: false,
+                yandexMetrikaId: null,
+                ...e
+            };
 
             if (typeof supabase === 'undefined') {
                 console.warn('[TA] Supabase not loaded yet, waiting...');
@@ -248,6 +258,12 @@
             if (typeof el === 'string') {
                 this._currentHoverElement = el.substring(0, 50).replace(/\s+/g, ' ').trim();
             }
+        },
+
+        _initListeners() {
+            window.addEventListener('beforeunload', () => { this._checkSessionTimeout(); this._syncToSupabase() });
+            window.addEventListener('popstate', () => this.trackEvent("history_change"));
+            window.addEventListener('hashchange', () => this.trackEvent("hash_change"));
         },
 
         // --- 4. HARDWARE ---
