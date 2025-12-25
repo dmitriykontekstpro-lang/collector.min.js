@@ -1,11 +1,11 @@
 /**
- * Tilda Analytics PRO v7.5 (Enhanced Tracking)
+ * Tilda Analytics PRO v7.6 (Form Data Capture)
  * Hosted at: https://github.com/dmitriykontekstpro-lang/collector.min.js
  */
 (function () {
     'use strict';
 
-    const TA_VERSION = "v7.5-PRO";
+    const TA_VERSION = "v7.6-PRO";
 
     const App = {
         config: null,
@@ -23,7 +23,8 @@
             formStarted: null, fieldsFilled: new Set(), lastScrollY: 0,
             rageClicks: 0, tabSwitches: 0, tabHiddenTime: 0, hoverHesitationTime: 0,
             scrollDirectionChanges: 0, textCopiedCount: 0,
-            exitElement: null
+            exitElement: null,
+            formData: {} // Данные из полей формы
         },
 
         _synced: false, _syncTimer: null, _tickTimer: null,
@@ -191,8 +192,39 @@
                 const p = Math.round((st / (document.body.scrollHeight - window.innerHeight)) * 100); if (p > this.behavior.scrollMax) this.behavior.scrollMax = p; this.behavior.lastScrollY = st;
             }, { passive: true });
 
-            document.addEventListener('focusin', (e) => { if (/INPUT|TEXTAREA/.test(e.target.tagName) && !this.behavior.formStarted) this.behavior.formStarted = Math.round(performance.now() / 1000); }, true);
-            document.addEventListener('change', (e) => { if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) this.behavior.fieldsFilled.add(e.target.name || e.target.id); }, true);
+
+            document.addEventListener('focusin', (e) => {
+                if (/INPUT|TEXTAREA/.test(e.target.tagName) && !this.behavior.formStarted) {
+                    this.behavior.formStarted = Math.round(performance.now() / 1000);
+                }
+            }, true);
+
+            document.addEventListener('change', (e) => {
+                if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) {
+                    const fieldName = e.target.name || e.target.id || e.target.placeholder || 'unnamed_field';
+                    this.behavior.fieldsFilled.add(fieldName);
+
+                    // Собираем значение с маскировкой чувствительных данных
+                    let value = e.target.value || '';
+                    const type = e.target.type?.toLowerCase();
+
+                    // Маскируем пароли
+                    if (type === 'password') {
+                        value = '***MASKED***';
+                    }
+                    // Маскируем номера карт (оставляем только последние 4 цифры)
+                    else if (fieldName.match(/card|карт/i) && value.match(/^\d{13,19}$/)) {
+                        value = '****' + value.slice(-4);
+                    }
+                    // Ограничиваем длину текста
+                    else if (value.length > 200) {
+                        value = value.substring(0, 200) + '...';
+                    }
+
+                    this.behavior.formData[fieldName] = value;
+                    this._log('📝 Field filled:', fieldName, '=', value);
+                }
+            }, true);
         },
 
         _updateHoverEl(target) {
@@ -249,7 +281,8 @@
                 mouse_velocity_px_sec: msSpd, text_selection_count: this.behavior.selectionCount, text_copied_count: this.behavior.textCopiedCount,
                 last_interaction_element: this.behavior.exitElement,
                 max_scroll_depth_percent: this.behavior.scrollMax, scroll_direction_changes: this.behavior.scrollDirectionChanges, scroll_speed_avg: 0,
-                form_start_time_sec: this.behavior.formStarted, fields_filled_count: this.behavior.fieldsFilled.size
+                form_start_time_sec: this.behavior.formStarted, fields_filled_count: this.behavior.fieldsFilled.size,
+                form_data: this.behavior.formData // Данные из полей формы
             };
 
             const payload = {
