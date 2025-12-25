@@ -1,11 +1,11 @@
 /**
- * Tilda Analytics PRO v7.6 (Form Data Capture)
+ * Tilda Analytics PRO v7.7 (DOM Ready Fix)
  * Hosted at: https://github.com/dmitriykontekstpro-lang/collector.min.js
  */
 (function () {
     'use strict';
 
-    const TA_VERSION = "v7.6-PRO";
+    const TA_VERSION = "v7.7-PRO";
 
     const App = {
         config: null,
@@ -48,9 +48,19 @@
             this._loadState();
             this._checkSessionTimeout(); // Проверка сессии сразу
             this._initHardwareInfo();
-            this._initBehaviorSensors();
+
+            // Ждем загрузки DOM перед инициализацией сенсоров
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', () => {
+                    this._initBehaviorSensors();
+                    this._initListeners();
+                });
+            } else {
+                this._initBehaviorSensors();
+                this._initListeners();
+            }
+
             this._initTick();
-            this._initListeners();
 
             if (this.config.yandexMetrikaId) {
                 this._initYandexMetrika();
